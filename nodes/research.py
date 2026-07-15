@@ -20,7 +20,9 @@ class ResearchReport(BaseModel):
     recent_news: List[str] = Field(description="List of recent news highlights, updates, or press releases.")
     drone_use_cases: List[str] = Field(description="Potential or existing drone use cases suitable for this company/industry.")
     potential_fit: str = Field(description="Analysis of how FlytBase's drone automation solution fits the company's needs.")
-    sources: List[str] = Field(description="List of source URLs from the search results used to compile this report.")
+    organization_structure: str = Field(description="Organizational structure or reporting hierarchy relevant to this lead.")
+    budget_signals: str = Field(description="Public information about technology investments, capex, infrastructure spending, digital transformation initiatives, or any publicly available budget signals. If unavailable return 'Unknown'.")
+    operational_priorities: List[str] = Field(description="Operational priorities extracted from recent news, investor communications, annual reports, press releases or company announcements.")
 
 
 def perform_company_search(company: str, industry: str, country: str) -> Tuple[str, List[str]]:
@@ -36,13 +38,12 @@ def perform_company_search(company: str, industry: str, country: str) -> Tuple[s
 
     tavily_client = TavilyClient(api_key=tavily_key)
     
-    # Construct a search query aimed at finding the company background, headquarters, drone usage, and news
+    # Construct a search query aimed at finding the company background, headquarters, news, structure, financial signals, and drone usage
     search_query = (
-    f"{company} company overview "
-    f"{company} headquarters "
-    f"{company} latest news "
-    f"{industry} drone use cases"
-)
+        f"{company} company overview headquarters latest news "
+        f"organizational structure annual report investor relations "
+        f"technology investment capex digital transformation drone use cases"
+    )
     search_response = tavily_client.search(query=search_query, max_results=5)
 
     results_text = []
@@ -84,6 +85,9 @@ def research_node(state: AgentState) -> AgentState:
             "recent_news": [],
             "drone_use_cases": [],
             "potential_fit": "N/A",
+            "organization_structure": "Unknown",
+            "budget_signals": "Unknown",
+            "operational_priorities": [],
             "sources": []
         }
         return state
@@ -107,37 +111,43 @@ def research_node(state: AgentState) -> AgentState:
     structured_llm = llm.with_structured_output(ResearchReport)
 
     # Compile synthesis instruction prompt
-    prompt = f"""You are an Enterprise Sales Research Agent.
+    prompt = f"""You are an Enterprise Research Analyst.
 
 Your job is to research a potential enterprise customer for FlytBase.
 
 Using ONLY the supplied search results:
+- Never invent facts.
+- If information is unavailable return "Unknown".
+- Populate every field of the ResearchReport.
 
-- Summarize the company.
-- Identify its industry.
-- Identify headquarters.
-- Extract recent news.
-- Suggest realistic drone automation use cases.
-- Explain why FlytBase could help.
-- Do not invent facts.
-- If information is unavailable, return an empty value.
+Extract and populate:
+• company summary
+• industry
+• headquarters
+• organizational structure
+• budget signals
+• recent news
+• operational priorities
+• drone use cases
+• potential fit
+
+Do NOT generate or guess source URLs.
 
 Search Results:
-
 {search_context}
-
 """
 
     # Run the model to get structured report
     report = structured_llm.invoke(prompt)
 
-    # Overwrite sources with actual Tavily URLs
-    report.sources = sources
-
-    # Convert to dictionary
+    # Convert report object to a standard dictionary
     if hasattr(report, "model_dump"):
-        state["research"] = report.model_dump()
+        result = report.model_dump()
     else:
-        state["research"] = report.dict()
+        result = report.dict()
+
+    # Manually append the source URLs obtained directly from Tavily search
+    result["sources"] = sources
+    state["research"] = result
 
     return state
