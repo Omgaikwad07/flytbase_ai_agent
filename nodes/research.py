@@ -1,0 +1,143 @@
+import os
+from typing import List, Tuple
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+from tavily import TavilyClient
+from langchain_groq import ChatGroq
+from state import AgentState
+
+# Load environment variables (Tavily and Groq API keys)
+load_dotenv()
+
+class ResearchReport(BaseModel):
+    """
+    Pydantic schema representing the structured corporate research profile
+    synthesized from web search results.
+    """
+    company_summary: str = Field(description="Summary of the company's background, operations, and core offerings.")
+    industry: str = Field(description="The sector or industry of operation.")
+    headquarters: str = Field(description="City and/or country of the company's headquarters.")
+    recent_news: List[str] = Field(description="List of recent news highlights, updates, or press releases.")
+    drone_use_cases: List[str] = Field(description="Potential or existing drone use cases suitable for this company/industry.")
+    potential_fit: str = Field(description="Analysis of how FlytBase's drone automation solution fits the company's needs.")
+    sources: List[str] = Field(description="List of source URLs from the search results used to compile this report.")
+
+
+def perform_company_search(company: str, industry: str, country: str) -> Tuple[str, List[str]]:
+    """
+    Queries the Tavily Search API for information about the target lead company.
+    Returns a combined text block of the results and a list of source URLs.
+    
+    This helper isolates the I/O of web searching to keep the node logic modular.
+    """
+    tavily_key = os.getenv("TAVILY_API_KEY")
+    if not tavily_key:
+        raise ValueError("TAVILY_API_KEY is not set in the environment or .env file.")
+
+    tavily_client = TavilyClient(api_key=tavily_key)
+    
+    # Construct a search query aimed at finding the company background, headquarters, drone usage, and news
+    search_query = (
+    f"{company} company overview "
+    f"{company} headquarters "
+    f"{company} latest news "
+    f"{industry} drone use cases"
+)
+    search_response = tavily_client.search(query=search_query, max_results=5)
+
+    results_text = []
+    sources = []
+    
+    # Process and clean search results into a clean string context for the LLM
+    for result in search_response.get("results", []):
+        url = result.get("url", "")
+        if url:
+            sources.append(url)
+        title = result.get("title", "Untitled")
+        content = result.get("content", "")
+        results_text.append(f"Title: {title}\nURL: {url}\nContent: {content}\n")
+
+    return "\n".join(results_text), sources
+
+
+def research_node(state: AgentState) -> AgentState:
+    """
+    LangGraph workflow node that researches the parsed lead company.
+    
+    Why:
+    - This node gathers external context about the lead company (such as domain,
+      headquarters, recent news, and potential drone use cases) so that subsequent
+      qualification and email personalization nodes have high-quality, up-to-date data.
+    """
+    # Extract parsed lead info containing company, industry, and country details
+    parsed_lead = state.get("parsed_lead", {})
+    company = parsed_lead.get("company", "")
+    industry = parsed_lead.get("industry", "")
+    country = parsed_lead.get("country", "")
+
+    # If key details are missing, skip searching to prevent empty queries and save API credits
+    if not company:
+        state["research"] = {
+            "company_summary": "No company name available in parsed lead data.",
+            "industry": industry or "Unknown",
+            "headquarters": country or "Unknown",
+            "recent_news": [],
+            "drone_use_cases": [],
+            "potential_fit": "N/A",
+            "sources": []
+        }
+        return state
+
+    # Execute search query to fetch recent web context
+    search_context, sources = perform_company_search(company, industry, country)
+
+    # Initialize Groq client to synthesize the raw search results
+    groq_key = os.getenv("GROQ_API_KEY")
+    if not groq_key:
+        raise ValueError("GROQ_API_KEY is not set in the environment or .env file.")
+
+    # Low temperature is used to ensure factual adherence to the search results
+    llm = ChatGroq(
+        model="llama-3.1-8b-instant",
+        temperature=0,
+        groq_api_key=groq_key
+    )
+
+    # Configure structured outputs ensuring the synthesis fits the Pydantic schema
+    structured_llm = llm.with_structured_output(ResearchReport)
+
+    # Compile synthesis instruction prompt
+    prompt = f"""You are an Enterprise Sales Research Agent.
+
+Your job is to research a potential enterprise customer for FlytBase.
+
+Using ONLY the supplied search results:
+
+- Summarize the company.
+- Identify its industry.
+- Identify headquarters.
+- Extract recent news.
+- Suggest realistic drone automation use cases.
+- Explain why FlytBase could help.
+- Do not invent facts.
+- If information is unavailable, return an empty value.
+
+Search Results:
+
+{search_context}
+
+"""
+
+    # Run the model to get structured report
+    report = structured_llm.invoke(prompt)
+
+    # Overwrite sources with actual Tavily URLs
+    report.sources = sources
+
+    # Convert to dictionary
+    if hasattr(report, "model_dump"):
+        state["research"] = report.model_dump()
+    else:
+        state["research"] = report.dict()
+
+    return state
