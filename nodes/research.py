@@ -40,9 +40,7 @@ def perform_company_search(company: str, industry: str, country: str) -> Tuple[s
     
     # Construct a search query aimed at finding the company background, headquarters, news, structure, financial signals, and drone usage
     search_query = (
-        f"{company} company overview headquarters latest news "
-        f"organizational structure annual report investor relations "
-        f"technology investment capex digital transformation drone use cases"
+        f"{company} {country} {industry} operations capex budget organizational structure drone use cases"
     )
     search_response = tavily_client.search(query=search_query, max_results=5)
 
