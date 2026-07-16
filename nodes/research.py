@@ -17,12 +17,12 @@ class ResearchReport(BaseModel):
     company_summary: str = Field(description="Summary of the company's background, operations, and core offerings.")
     industry: str = Field(description="The sector or industry of operation.")
     headquarters: str = Field(description="City and/or country of the company's headquarters.")
-    recent_news: List[str] = Field(description="List of recent news highlights, updates, or press releases.")
-    drone_use_cases: List[str] = Field(description="Potential or existing drone use cases suitable for this company/industry.")
+    recent_news: str = Field(description="List of recent news highlights, updates, or press releases.")
+    drone_use_cases: str = Field(description="Potential or existing drone use cases suitable for this company/industry.")
     potential_fit: str = Field(description="Analysis of how FlytBase's drone automation solution fits the company's needs.")
     organization_structure: str = Field(description="Organizational structure or reporting hierarchy relevant to this lead.")
     budget_signals: str = Field(description="Public information about technology investments, capex, infrastructure spending, digital transformation initiatives, or any publicly available budget signals. If unavailable return 'Unknown'.")
-    operational_priorities: List[str] = Field(description="Operational priorities extracted from recent news, investor communications, annual reports, press releases or company announcements.")
+    operational_priorities: str = Field(description="Operational priorities extracted from recent news, investor communications, annual reports, press releases or company announcements.")
 
 
 def perform_company_search(company: str, industry: str, country: str) -> Tuple[str, List[str]]:
@@ -82,12 +82,12 @@ def research_node(state: AgentState) -> AgentState:
             "company_summary": "No company name available in parsed lead data.",
             "industry": industry or "Unknown",
             "headquarters": country or "Unknown",
-            "recent_news": [],
-            "drone_use_cases": [],
+            "recent_news": "Unknown",
+            "drone_use_cases": "Unknown",
             "potential_fit": "N/A",
             "organization_structure": "Unknown",
             "budget_signals": "Unknown",
-            "operational_priorities": [],
+            "operational_priorities": "Unknown",
             "sources": []
         }
         return state
@@ -102,7 +102,7 @@ def research_node(state: AgentState) -> AgentState:
 
     # Low temperature is used to ensure factual adherence to the search results
     llm = ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         groq_api_key=groq_key
     )
@@ -116,27 +116,31 @@ def research_node(state: AgentState) -> AgentState:
 Your job is to research a potential enterprise customer for FlytBase.
 
 Using ONLY the supplied search results:
+
+General Rules:
 - Never invent facts.
-- If information is unavailable return "Unknown".
 - Populate every field of the ResearchReport.
+- If information is unavailable, return "Unknown".
+- Never guess information.
 
 Extract and populate:
-• company summary
+
+• company_summary
 • industry
 • headquarters
-• organizational structure
-• budget signals
-• recent news
-• operational priorities
-• drone use cases
-• potential fit
+• organization_structure
+• budget_signals
+• recent_news
+• operational_priorities
+• drone_use_cases
+• potential_fit
 
 Do NOT generate or guess source URLs.
 
 Search Results:
+
 {search_context}
 """
-
     # Run the model to get structured report
     report = structured_llm.invoke(prompt)
 

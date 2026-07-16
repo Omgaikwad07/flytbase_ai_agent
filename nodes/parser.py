@@ -38,9 +38,9 @@ def parser_node(state: AgentState) -> AgentState:
         raise ValueError("GROQ_API_KEY is not set in the environment or .env file.")
 
     # 3. Initialize the ChatGroq model with low temperature for high extraction fidelity
-    # Using llama-3.1-8b-instant as it is fast, cost-effective, and fully supports structured outputs
+    # Using llama-3.3-70b-versatile as it is fast, cost-effective, and fully supports structured outputs
     llm = ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         groq_api_key=api_key
     )

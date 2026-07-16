@@ -117,7 +117,7 @@ def case_study_node(state: AgentState) -> AgentState:
 
     # High fidelity structured output extraction
     llm = ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         groq_api_key=groq_key
     )

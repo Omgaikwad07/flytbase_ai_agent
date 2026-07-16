@@ -43,7 +43,7 @@ def summary_node(state: AgentState) -> AgentState:
 
     # Initialize model using llama-3.1-8b-instant as requested
     llm = ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         groq_api_key=groq_key
     )

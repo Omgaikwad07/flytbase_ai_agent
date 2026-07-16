@@ -40,7 +40,7 @@ def qualification_node(state: AgentState) -> AgentState:
 
     # Using temperature=0 to get deterministic, objective qualification results
     llm = ChatGroq(
-        model="llama-3.1-8b-instant",
+        model="llama-3.3-70b-versatile",
         temperature=0,
         groq_api_key=groq_key
     )
