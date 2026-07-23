@@ -21,9 +21,10 @@ def extract_email_fields(raw_email: str) -> Tuple[Optional[str], Optional[str], 
                 sender = line[len("from:"):].strip() or None
             elif line_stripped.lower().startswith("subject:"):
                 subject = line[len("subject:"):].strip() or None
-            elif line_stripped.lower().startswith("body:"):
-                # Capture any body content on the same line as the 'Body:' header
-                body_content = line[len("body:"):].strip()
+            elif line_stripped.lower().startswith("body:") or line_stripped.lower().startswith("context:"):
+                # Capture any body/context content on the same line as the header
+                prefix_len = len("body:") if line_stripped.lower().startswith("body:") else len("context:")
+                body_content = line[prefix_len:].strip()
                 if body_content:
                     body_lines.append(body_content)
                 in_body = True
